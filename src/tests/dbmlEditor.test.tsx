@@ -15,6 +15,41 @@ vi.mock('@monaco-editor/react', () => ({
 }))
 
 describe('DbmlEditor workspace library', () => {
+  it('adds hover descriptions to panel header toolbar icon buttons', () => {
+    const { container } = render(
+      <DbmlEditor
+        source="Table users { id integer [pk] }"
+        language="zh"
+        isDirty={false}
+        workspaceSummaries={[]}
+        currentWorkspaceId={undefined}
+        parseError={undefined}
+        onChange={vi.fn()}
+        onLoadSample={vi.fn()}
+        onLanguageChange={vi.fn()}
+        onSaveWorkspace={vi.fn()}
+        onImportWorkspace={vi.fn()}
+        onLoadWorkspace={vi.fn()}
+        onRenameWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+      />,
+    )
+
+    const toolbarControls = container.querySelectorAll('.panelHeader .toolbar label, .panelHeader .toolbar button')
+
+    expect(Array.from(toolbarControls).map((control) => ({
+      label: control.getAttribute('aria-label'),
+      title: control.getAttribute('title'),
+    }))).toEqual([
+      { label: '导入 DBML 文件', title: '导入 DBML 文件' },
+      { label: 'DBML 列表', title: 'DBML 列表' },
+      { label: '保存当前 DBML', title: '保存当前 DBML' },
+      { label: '切换到英文', title: '切换到英文' },
+      { label: '加载示例', title: '加载示例' },
+      { label: '复制 DBML', title: '复制 DBML' },
+    ])
+  })
+
   it('shows saved DBML items and exposes save, load, rename, and delete actions', async () => {
     const user = userEvent.setup()
     const onSaveWorkspace = vi.fn()

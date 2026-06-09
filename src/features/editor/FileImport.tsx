@@ -17,15 +17,15 @@ export function FileImport({ language = defaultLanguage, onImport }: FileImportP
 
   return (
     <Button asChild size="icon" variant="outline" title={label}>
-      <label className="relative overflow-hidden">
-      <FileUp size={18} />
-      <input
-        className="absolute inset-0 cursor-pointer opacity-0"
-        aria-label={label}
-        type="file"
-        accept=".dbml,.txt"
-        onChange={(event) => void handleFile(event.target.files?.[0])}
-      />
+      <label aria-label={label} className="relative overflow-hidden" title={label}>
+        <FileUp size={18} />
+        <input
+          className="absolute inset-0 cursor-pointer opacity-0"
+          aria-label={label}
+          type="file"
+          accept=".dbml,.txt"
+          onChange={(event) => void handleFile(event.target.files?.[0])}
+        />
       </label>
     </Button>
   )

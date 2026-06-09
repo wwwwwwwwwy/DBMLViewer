@@ -139,7 +139,14 @@ export function DbmlEditor({
             <Languages size={18} />
             <span className="sr-only">{languageTitle}</span>
           </Button>
-          <Button size="icon" variant="outline" type="button" onClick={onLoadSample} title={t(language, 'editor.loadSample')}>
+          <Button
+            size="icon"
+            variant="outline"
+            type="button"
+            onClick={onLoadSample}
+            title={t(language, 'editor.loadSample')}
+            aria-label={t(language, 'editor.loadSample')}
+          >
             <RotateCcw size={18} />
           </Button>
           <Button
@@ -148,6 +155,7 @@ export function DbmlEditor({
             type="button"
             onClick={() => void navigator.clipboard.writeText(draft)}
             title={t(language, 'editor.copyDbml')}
+            aria-label={t(language, 'editor.copyDbml')}
           >
             <Clipboard size={18} />
           </Button>

@@ -7,16 +7,7 @@ export function filterModelBySelectedRelations(
 ): SchemaModel {
   if (!enabled || !selectedTableId) return model
 
-  const relatedTableIds = new Set<string>([selectedTableId])
-
-  model.relations.forEach((relation) => {
-    if (relation.fromTableId === selectedTableId) {
-      relatedTableIds.add(relation.toTableId)
-    }
-    if (relation.toTableId === selectedTableId) {
-      relatedTableIds.add(relation.fromTableId)
-    }
-  })
+  const relatedTableIds = findConnectedTableIds(model, selectedTableId)
 
   return {
     ...model,
@@ -27,6 +18,32 @@ export function filterModelBySelectedRelations(
         relatedTableIds.has(relation.toTableId),
     ),
   }
+}
+
+function findConnectedTableIds(model: SchemaModel, selectedTableId: string): Set<string> {
+  const connectedTableIds = new Set<string>([selectedTableId])
+  const pendingTableIds = [selectedTableId]
+
+  while (pendingTableIds.length) {
+    const tableId = pendingTableIds.shift()
+    if (!tableId) continue
+
+    model.relations.forEach((relation) => {
+      const adjacentTableId = getAdjacentTableId(relation.fromTableId, relation.toTableId, tableId)
+      if (!adjacentTableId || connectedTableIds.has(adjacentTableId)) return
+
+      connectedTableIds.add(adjacentTableId)
+      pendingTableIds.push(adjacentTableId)
+    })
+  }
+
+  return connectedTableIds
+}
+
+function getAdjacentTableId(fromTableId: string, toTableId: string, tableId: string): string | undefined {
+  if (fromTableId === tableId) return toTableId
+  if (toTableId === tableId) return fromTableId
+  return undefined
 }
 
 export function filterModelByConnectedTables(
