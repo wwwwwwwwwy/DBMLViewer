@@ -22,9 +22,11 @@
     --destructive-foreground: 0 0% 100%;
     --border: 214 20% 86%;
     --input: 214 20% 86%;
-  --ring: 173 80% 25%;
-  --radius: 0.5rem;
-  --top-bar-height: 76px;
+    --ring: 173 80% 25%;
+    --radius: 0.5rem;
+    --top-bar-height: 64px;
+    --editor-panel-width: 420px;
+    --inspector-panel-width: 340px;
   }
 
   * {
@@ -69,9 +71,12 @@
 
 .appShell {
   display: grid;
-  grid-template-columns: minmax(320px, 28vw) minmax(420px, 1fr) minmax(280px, 22vw);
+  grid-template-columns: var(--editor-panel-width) minmax(960px, 1fr) var(--inspector-panel-width);
+  gap: 10px;
   height: 100vh;
+  padding: 10px;
   overflow: hidden;
+  background: #e8eef4;
 }
 
 .editorPanel,
@@ -79,7 +84,9 @@
 .inspectorPanel {
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid hsl(var(--border));
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
   background: hsl(var(--background));
 }
 
@@ -92,7 +99,9 @@
 .canvasPanel {
   display: grid;
   grid-template-rows: auto 1fr;
-  background: #f2f5f8;
+  border-color: #cbd6e2;
+  background: #edf3f7;
+  box-shadow: 0 14px 34px rgb(15 23 42 / 8%);
 }
 
 .panelHeader,
@@ -103,7 +112,7 @@
   gap: 12px;
   height: var(--top-bar-height);
   min-height: var(--top-bar-height);
-  padding: 14px;
+  padding: 12px;
   border-bottom: 1px solid hsl(var(--border));
   background: hsl(var(--card));
 }
@@ -119,9 +128,47 @@
   font-size: 16px;
 }
 
+.editorPanel .panelHeader {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: center;
+  align-items: start;
+  height: auto;
+  min-height: 96px;
+  gap: 10px;
+}
+
+.editorPanel .panelHeader > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.editorPanel .panelHeader h1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .toolbar {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.editorPanel .toolbar {
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
+.editorPanel .toolbar > * {
+  flex: 0 0 auto;
 }
 
 .workspaceDialogBackdrop {
@@ -252,7 +299,12 @@
 }
 
 .canvasToolbar {
+  align-content: center;
+  flex-wrap: nowrap;
   justify-content: flex-start;
+  height: auto;
+  min-height: 58px;
+  padding: 10px 12px;
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -261,8 +313,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 260px;
-  height: 36px;
+  flex: 1 1 280px;
+  min-width: 220px;
+  max-width: 520px;
+  height: 40px;
   padding: 0 10px;
   border: 1px solid hsl(var(--input));
   border-radius: var(--radius);
@@ -274,15 +328,23 @@
 .toolbarCheckbox {
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 7px;
-  min-height: 36px;
+  height: 40px;
+  min-height: 40px;
   padding: 0 10px;
   border: 1px solid hsl(var(--input));
   border-radius: var(--radius);
   color: #334155;
   background: hsl(var(--card));
   font-size: 12px;
+  white-space: nowrap;
   box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
+}
+
+.canvasToolbar > button {
+  flex: 0 0 auto;
+  height: 40px;
 }
 
 .toolbarCheckbox input {
@@ -446,6 +508,7 @@
   overflow-wrap: anywhere;
 }
 
+.relationLookup,
 .tableListSection,
 .detailStack section {
   border: 1px solid hsl(var(--border));
@@ -454,15 +517,120 @@
   background: hsl(var(--card));
 }
 
+.relationLookup h3,
 .tableListSection h3,
 .detailStack h3,
 .detailStack h4 {
   margin: 0 0 10px;
 }
 
+.relationLookup h3,
 .tableListSection h3,
 .detailStack h3 {
   font-size: 17px;
+}
+
+.relationLookupFields {
+  display: grid;
+  gap: 10px;
+}
+
+.tableCombobox {
+  position: relative;
+  display: grid;
+  gap: 6px;
+}
+
+.tableCombobox label {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tableSuggestionList {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  display: grid;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--popover));
+  box-shadow: 0 12px 24px rgb(15 23 42 / 12%);
+}
+
+.tableSuggestion {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-top: 1px solid #eef2f6;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tableSuggestion:first-child {
+  border-top: 0;
+}
+
+.tableSuggestion:hover,
+.tableSuggestion:focus-visible {
+  background: #f8fafc;
+  outline: 0;
+}
+
+.tableSuggestion strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.tableSuggestion span {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.relationLookupResult {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #eef2f6;
+  font-size: 12px;
+}
+
+.relationLookupResult strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.relationLookupResult p {
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+}
+
+.relationLookupResultMuted {
+  color: hsl(var(--muted-foreground));
+}
+
+.relationPathSteps {
+  display: grid;
+  gap: 6px;
+}
+
+.relationPathStep {
+  padding: 7px 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius);
+  background: #f8fafc;
+  color: #334155;
+  overflow-wrap: anywhere;
 }
 
 .detailStack h4 {
@@ -595,24 +763,27 @@
   outline: 0;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .appShell {
-    grid-template-columns: minmax(300px, 36vw) minmax(360px, 1fr);
+    grid-template-columns: minmax(280px, 32vw) minmax(460px, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(220px, 28vh);
   }
 
   .inspectorPanel {
-    display: none;
+    grid-column: 1 / -1;
+    border-right: 1px solid hsl(var(--border));
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 900px) {
   .appShell {
     grid-template-columns: 1fr;
-    grid-template-rows: 45vh 55vh;
+    grid-template-rows: minmax(280px, 34vh) minmax(420px, 1fr) minmax(240px, 30vh);
+    overflow: auto;
   }
 
   .editorPanel {
-    border-bottom: 1px solid hsl(var(--border));
+    min-height: 280px;
   }
 
   .canvasToolbar {
@@ -620,6 +791,7 @@
   }
 
   .searchBox {
+    max-width: none;
     min-width: 100%;
   }
 }

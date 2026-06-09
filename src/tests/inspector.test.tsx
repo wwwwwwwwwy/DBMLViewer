@@ -140,6 +140,79 @@ describe('InspectorPanel', () => {
     expect(onSelectTable).toHaveBeenNthCalledWith(1, 'users')
     expect(onSelectTable).toHaveBeenNthCalledWith(2, 'orders')
   })
+
+  it('suggests tables by name or table note in the relation lookup inputs', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <InspectorPanel
+        model={modelWithIndirectRelation}
+        onCopyModel={vi.fn()}
+      />,
+    )
+
+    await user.type(screen.getByRole('combobox', { name: '起始表' }), '用户')
+
+    expect(screen.getByRole('option', { name: 'users 用户主数据表' })).toBeInTheDocument()
+  })
+
+  it('shows direct relation fields after choosing two directly related tables', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <InspectorPanel
+        model={modelWithIndirectRelation}
+        onCopyModel={vi.fn()}
+      />,
+    )
+
+    await user.type(screen.getByRole('combobox', { name: '起始表' }), 'orders')
+    await user.click(screen.getByRole('option', { name: 'orders 订单表' }))
+    await user.type(screen.getByRole('combobox', { name: '目标表' }), 'users')
+    await user.click(screen.getByRole('option', { name: 'users 用户主数据表' }))
+
+    expect(screen.getByText('直接关联')).toBeInTheDocument()
+    expect(screen.getByText('orders.user_id → users.id')).toBeInTheDocument()
+  })
+
+  it('shows intermediate tables and relation fields for indirectly related tables', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <InspectorPanel
+        model={modelWithIndirectRelation}
+        onCopyModel={vi.fn()}
+      />,
+    )
+
+    await user.type(screen.getByRole('combobox', { name: '起始表' }), 'order_items')
+    await user.click(screen.getByRole('option', { name: 'order_items 订单明细表' }))
+    await user.type(screen.getByRole('combobox', { name: '目标表' }), 'users')
+    await user.click(screen.getByRole('option', { name: 'users 用户主数据表' }))
+
+    expect(screen.getByText('间接关联')).toBeInTheDocument()
+    expect(screen.getByText('中间表：orders')).toBeInTheDocument()
+    expect(screen.getByText('order_items.order_id → orders.id')).toBeInTheDocument()
+    expect(screen.getByText('orders.user_id → users.id')).toBeInTheDocument()
+  })
+
+  it('shows an unrelated message when there is no direct or indirect relation', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <InspectorPanel
+        model={modelWithIndirectRelation}
+        onCopyModel={vi.fn()}
+      />,
+    )
+
+    await user.type(screen.getByRole('combobox', { name: '起始表' }), 'audit_logs')
+    await user.click(screen.getByRole('option', { name: 'audit_logs 审计日志表' }))
+    await user.type(screen.getByRole('combobox', { name: '目标表' }), 'users')
+    await user.click(screen.getByRole('option', { name: 'users 用户主数据表' }))
+
+    expect(screen.getByText('不关联')).toBeInTheDocument()
+  })
 })
 
 const modelWithNotes: SchemaModel = {
@@ -218,6 +291,59 @@ const modelWithRelation: SchemaModel = {
       toTableId: 'orders',
       toColumnIds: ['orders.user_id'],
       cardinality: 'one-to-many',
+    },
+  ],
+  enums: [],
+}
+
+const modelWithIndirectRelation: SchemaModel = {
+  project: { name: 'Relation lookup project' },
+  tables: [
+    {
+      id: 'users',
+      name: 'users',
+      note: '用户主数据表',
+      columns: [],
+      indexes: [],
+    },
+    {
+      id: 'orders',
+      name: 'orders',
+      note: '订单表',
+      columns: [],
+      indexes: [],
+    },
+    {
+      id: 'order_items',
+      name: 'order_items',
+      note: '订单明细表',
+      columns: [],
+      indexes: [],
+    },
+    {
+      id: 'audit_logs',
+      name: 'audit_logs',
+      note: '审计日志表',
+      columns: [],
+      indexes: [],
+    },
+  ],
+  relations: [
+    {
+      id: 'orders_users',
+      fromTableId: 'orders',
+      fromColumnIds: ['orders.user_id'],
+      toTableId: 'users',
+      toColumnIds: ['users.id'],
+      cardinality: 'many-to-one',
+    },
+    {
+      id: 'items_orders',
+      fromTableId: 'order_items',
+      fromColumnIds: ['order_items.order_id'],
+      toTableId: 'orders',
+      toColumnIds: ['orders.id'],
+      cardinality: 'many-to-one',
     },
   ],
   enums: [],

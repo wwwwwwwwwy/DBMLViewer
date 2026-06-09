@@ -10,6 +10,15 @@ const reactFlowMock = vi.hoisted(() => ({
   fitView: vi.fn(),
 }))
 
+const layoutGraphMock = vi.hoisted(() =>
+  vi.fn(async (nodes: Array<{ id: string }>) =>
+    nodes.map((node, index) => ({
+      ...node,
+      position: index === 0 ? { x: 80, y: 120 } : { x: 520, y: 240 },
+    })),
+  ),
+)
+
 vi.mock('@xyflow/react', () => ({
   Background: () => null,
   Controls: () => null,
@@ -39,11 +48,16 @@ vi.mock('@xyflow/react', () => ({
   useReactFlow: () => reactFlowMock,
 }))
 
+vi.mock('../features/diagram/layoutGraph', () => ({
+  layoutGraph: layoutGraphMock,
+}))
+
 describe('DiagramCanvas', () => {
   beforeEach(() => {
     reactFlowMock.setCenter.mockReset()
     reactFlowMock.getNode.mockReset()
     reactFlowMock.fitView.mockReset()
+    layoutGraphMock.mockClear()
   })
 
   it('centers the selected table in the canvas', async () => {
@@ -114,6 +128,182 @@ describe('DiagramCanvas', () => {
     })
     expect(screen.getByText('users')).toBeInTheDocument()
     expect(screen.getByText('orders')).toBeInTheDocument()
+  })
+
+  it('orders canvas toolbar controls as search, buttons, then filters', () => {
+    const { container } = render(
+      <DiagramCanvas
+        model={model}
+        positions={{}}
+        query=""
+        highlightedColumnIds={[]}
+        onQueryChange={vi.fn()}
+        onNodePositionChange={vi.fn()}
+        onSelectTable={vi.fn()}
+        onSelectRelation={vi.fn()}
+      />,
+    )
+
+    const toolbar = container.querySelector('.canvasToolbar')
+    const controlNames = Array.from(toolbar?.children ?? []).map((element) => {
+      if (element.classList.contains('searchBox')) return 'search'
+      if (element.tagName === 'BUTTON') return element.textContent?.trim() || element.getAttribute('title')
+      if (element.tagName === 'LABEL') return element.textContent?.trim()
+      return element.tagName
+    })
+
+    expect(controlNames).toEqual([
+      'search',
+      '自动布局',
+      '适应视图',
+      '导出 PNG',
+      'SVG',
+      '仅显示关联表',
+      '隐藏独立表',
+      '显示注释',
+    ])
+  })
+
+  it('automatically lays out the graph when any filter checkbox changes', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <DiagramCanvas
+        model={modelWithRelation}
+        positions={{}}
+        query=""
+        highlightedColumnIds={[]}
+        onQueryChange={vi.fn()}
+        onNodePositionChange={vi.fn()}
+        onSelectTable={vi.fn()}
+        onSelectRelation={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole('checkbox', { name: '仅显示关联表' }))
+    await user.click(screen.getByRole('checkbox', { name: '隐藏独立表' }))
+    await user.click(screen.getByRole('checkbox', { name: '显示注释' }))
+
+    await waitFor(() => {
+      expect(layoutGraphMock).toHaveBeenCalledTimes(3)
+    })
+  })
+
+  it('automatically lays out the graph when an import layout request arrives', async () => {
+    const { rerender } = render(
+      <DiagramCanvas
+        model={modelWithRelation}
+        positions={{}}
+        query=""
+        highlightedColumnIds={[]}
+        layoutRequestId={0}
+        onQueryChange={vi.fn()}
+        onNodePositionChange={vi.fn()}
+        onSelectTable={vi.fn()}
+        onSelectRelation={vi.fn()}
+      />,
+    )
+
+    expect(layoutGraphMock).not.toHaveBeenCalled()
+
+    rerender(
+      <DiagramCanvas
+        model={modelWithRelation}
+        positions={{}}
+        query=""
+        highlightedColumnIds={[]}
+        layoutRequestId={1}
+        onQueryChange={vi.fn()}
+        onNodePositionChange={vi.fn()}
+        onSelectTable={vi.fn()}
+        onSelectRelation={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(layoutGraphMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('centers the first visible table after automatic layout when nothing is selected', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <DiagramCanvas
+        model={modelWithRelation}
+        positions={{}}
+        query=""
+        highlightedColumnIds={[]}
+        onQueryChange={vi.fn()}
+        onNodePositionChange={vi.fn()}
+        onSelectTable={vi.fn()}
+        onSelectRelation={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: '自动布局' }))
+
+    await waitFor(() => {
+      expect(reactFlowMock.setCenter).toHaveBeenCalledWith(230, 220, {
+        duration: 400,
+        zoom: 1.05,
+      })
+    })
+  })
+
+  it('keeps and recenters the selected table after automatic layout from a filter change', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <DiagramCanvas
+        model={modelWithRelation}
+        positions={{}}
+        query=""
+        highlightedColumnIds={[]}
+        selectedTableId="orders"
+        onQueryChange={vi.fn()}
+        onNodePositionChange={vi.fn()}
+        onSelectTable={vi.fn()}
+        onSelectRelation={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole('checkbox', { name: '显示注释' }))
+
+    await waitFor(() => {
+      expect(reactFlowMock.setCenter).toHaveBeenCalledWith(670, 340, {
+        duration: 400,
+        zoom: 1.05,
+      })
+    })
+  })
+
+  it('keeps and recenters the selected relation after automatic layout from a filter change', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <DiagramCanvas
+        model={modelWithRelation}
+        positions={{}}
+        query=""
+        highlightedColumnIds={[]}
+        selectedRelationId="users_orders"
+        onQueryChange={vi.fn()}
+        onNodePositionChange={vi.fn()}
+        onSelectTable={vi.fn()}
+        onSelectRelation={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole('checkbox', { name: '显示注释' }))
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-selected="true"]')?.textContent).toBe('users_orders')
+      expect(reactFlowMock.setCenter).toHaveBeenCalledWith(450, 280, {
+        duration: 400,
+        zoom: 1.05,
+      })
+    })
   })
 })
 

@@ -29,4 +29,16 @@ describe('buildFlowElements', () => {
 
     expect(elements.nodes[0].data.showNotes).toBe(true)
   })
+
+  it('provides initial table dimensions so React Flow can render nodes before measuring them', () => {
+    const parsed = parseDbmlSource(sampleDbml)
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+
+    const model = normalizeDbmlDatabase(parsed.database)
+    const elements = buildFlowElements(model, {})
+
+    expect(elements.nodes[0].initialWidth).toBe(300)
+    expect(elements.nodes[0].initialHeight).toBe(220)
+  })
 })

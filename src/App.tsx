@@ -14,6 +14,7 @@ function App() {
     positions,
     selectedTableId,
     selectedRelationId,
+    layoutRequestId,
     highlightedColumnIds,
     query,
     language,
@@ -76,6 +77,7 @@ function App() {
         highlightedColumnIds={highlightedColumnIds}
         selectedTableId={selectedTableId}
         selectedRelationId={selectedRelationId}
+        layoutRequestId={layoutRequestId}
         onQueryChange={setQuery}
         onNodePositionChange={setNodePosition}
         onSelectTable={selectTable}

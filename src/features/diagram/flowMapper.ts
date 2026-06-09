@@ -33,6 +33,8 @@ export function buildFlowElements(
     nodes: model.tables.map((table, index) => ({
       id: table.id,
       type: 'table',
+      initialWidth: 300,
+      initialHeight: 220,
       position: savedPositions[table.id] ?? {
         x: 80 + (index % 3) * 360,
         y: 80 + Math.floor(index / 3) * 300,

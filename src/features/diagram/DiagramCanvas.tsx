@@ -10,7 +10,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Download, LayoutDashboard, Search, ScanSearch } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toPng, toSvg } from 'html-to-image'
 import { layoutGraph } from './layoutGraph'
 import { RelationEdge } from './RelationEdge'
@@ -30,6 +30,7 @@ import { defaultLanguage, t, type Language } from '../../i18n'
 
 const nodeTypes = { table: TableNode }
 const edgeTypes = { relation: RelationEdge }
+const tableNodeCenterOffset = { x: 150, y: 100 }
 
 type DiagramCanvasProps = {
   model?: SchemaModel
@@ -39,6 +40,7 @@ type DiagramCanvasProps = {
   highlightedColumnIds: string[]
   selectedTableId?: string
   selectedRelationId?: string
+  layoutRequestId?: number
   onQueryChange: (query: string) => void
   onNodePositionChange: (tableId: string, position: { x: number; y: number }) => void
   onSelectTable: (tableId?: string) => void
@@ -61,6 +63,7 @@ function DiagramCanvasInner({
   highlightedColumnIds,
   selectedTableId,
   selectedRelationId,
+  layoutRequestId,
   onQueryChange,
   onNodePositionChange,
   onSelectTable,
@@ -72,6 +75,9 @@ function DiagramCanvasInner({
   const [showRelatedOnly, setShowRelatedOnly] = useState(false)
   const [showConnectedOnly, setShowConnectedOnly] = useState(false)
   const [showObjectNotes, setShowObjectNotes] = useState(false)
+  const [pendingLayoutReason, setPendingLayoutReason] = useState<'manual' | 'filter'>()
+  const [pendingCenterAfterLayout, setPendingCenterAfterLayout] = useState(false)
+  const lastLayoutRequestId = useRef(layoutRequestId)
   const ariaLabelConfig = useMemo<Partial<AriaLabelConfig>>(() => ({
     'controls.ariaLabel': t(language, 'diagram.controls'),
     'controls.zoomIn.ariaLabel': t(language, 'diagram.zoomIn'),
@@ -86,6 +92,64 @@ function DiagramCanvasInner({
     const relatedModel = filterModelBySelectedRelations(model, showRelatedOnly, selectedTableId)
     return filterModelByConnectedTables(relatedModel, showConnectedOnly)
   }, [model, selectedTableId, showConnectedOnly, showRelatedOnly])
+
+  const centerTableNode = useCallback((node: DbmlTableNode) => {
+    void reactFlow.setCenter(
+      node.position.x + tableNodeCenterOffset.x,
+      node.position.y + tableNodeCenterOffset.y,
+      { duration: 400, zoom: 1.05 },
+    )
+  }, [reactFlow])
+
+  const centerSelectedRelation = useCallback((currentNodes: DbmlTableNode[], currentEdges: DbmlRelationEdge[]) => {
+    if (!selectedRelationId) return false
+
+    const relation = currentEdges.find((edge) => edge.id === selectedRelationId)
+    if (!relation) return false
+
+    const sourceNode = currentNodes.find((node) => node.id === relation.source)
+    const targetNode = currentNodes.find((node) => node.id === relation.target)
+    if (!sourceNode || !targetNode) return false
+
+    void reactFlow.setCenter(
+      (sourceNode.position.x + targetNode.position.x) / 2 + tableNodeCenterOffset.x,
+      (sourceNode.position.y + targetNode.position.y) / 2 + tableNodeCenterOffset.y,
+      { duration: 400, zoom: 1.05 },
+    )
+    return true
+  }, [reactFlow, selectedRelationId])
+
+  const centerSelectedOrFirstItem = useCallback((currentNodes: DbmlTableNode[], currentEdges: DbmlRelationEdge[]) => {
+    if (selectedTableId) {
+      const selectedNode = currentNodes.find((node) => node.id === selectedTableId)
+      if (selectedNode) {
+        centerTableNode(selectedNode)
+        return
+      }
+    }
+
+    if (centerSelectedRelation(currentNodes, currentEdges)) return
+
+    const firstNode = currentNodes[0]
+    if (firstNode) {
+      centerTableNode(firstNode)
+    }
+  }, [centerSelectedRelation, centerTableNode, selectedTableId])
+
+  const applyLayoutToElements = useCallback(async (
+    currentNodes: DbmlTableNode[],
+    currentEdges: DbmlRelationEdge[],
+  ) => {
+    const layouted = await layoutGraph(currentNodes, currentEdges)
+    setNodes(layouted)
+    setEdges(currentEdges)
+    setPendingCenterAfterLayout(true)
+    layouted.forEach((node) => onNodePositionChange(node.id, node.position))
+  }, [onNodePositionChange])
+
+  const applyLayout = useCallback(() => {
+    void applyLayoutToElements(nodes, edges)
+  }, [applyLayoutToElements, edges, nodes])
 
   useEffect(() => {
     if (!visibleModel) {
@@ -103,9 +167,32 @@ function DiagramCanvasInner({
       showObjectNotes,
       selectedRelationId,
     )
+
+    const hasNewLayoutRequest = layoutRequestId !== lastLayoutRequestId.current
+    if (hasNewLayoutRequest) {
+      lastLayoutRequestId.current = layoutRequestId
+    }
+
+    if (pendingLayoutReason || hasNewLayoutRequest) {
+      setPendingLayoutReason(undefined)
+      void applyLayoutToElements(elements.nodes, elements.edges)
+      return
+    }
+
     setNodes(elements.nodes)
     setEdges(elements.edges)
-  }, [highlightedColumnIds, language, positions, selectedRelationId, selectedTableId, showObjectNotes, visibleModel])
+  }, [
+    applyLayoutToElements,
+    highlightedColumnIds,
+    language,
+    layoutRequestId,
+    pendingLayoutReason,
+    positions,
+    selectedRelationId,
+    selectedTableId,
+    showObjectNotes,
+    visibleModel,
+  ])
 
   const matchedTableId = useMemo(() => {
     if (!visibleModel) return undefined
@@ -117,13 +204,9 @@ function DiagramCanvasInner({
 
     const matchedNode = reactFlow.getNode(matchedTableId)
     if (matchedNode) {
-      void reactFlow.setCenter(
-        matchedNode.position.x + 150,
-        matchedNode.position.y + 100,
-        { duration: 400, zoom: 1.05 },
-      )
+      centerTableNode(matchedNode)
     }
-  }, [matchedTableId, reactFlow])
+  }, [centerTableNode, matchedTableId, reactFlow])
 
   useEffect(() => {
     if (!selectedTableId) return
@@ -131,19 +214,24 @@ function DiagramCanvasInner({
     const selectedNode = nodes.find((node) => node.id === selectedTableId)
     if (!selectedNode) return
 
-    void reactFlow.setCenter(
-      selectedNode.position.x + 150,
-      selectedNode.position.y + 100,
-      { duration: 400, zoom: 1.05 },
-    )
-  }, [nodes, reactFlow, selectedTableId])
+    centerTableNode(selectedNode)
+  }, [centerTableNode, nodes, reactFlow, selectedTableId])
 
-  const applyLayout = useCallback(async () => {
-    const layouted = await layoutGraph(nodes, edges)
-    setNodes(layouted)
-    layouted.forEach((node) => onNodePositionChange(node.id, node.position))
-    window.setTimeout(() => reactFlow.fitView({ padding: 0.2, duration: 300 }), 50)
-  }, [edges, nodes, onNodePositionChange, reactFlow])
+  useEffect(() => {
+    if (!pendingCenterAfterLayout) return
+
+    const timeout = window.setTimeout(() => {
+      centerSelectedOrFirstItem(nodes, edges)
+      setPendingCenterAfterLayout(false)
+    }, 50)
+
+    return () => window.clearTimeout(timeout)
+  }, [centerSelectedOrFirstItem, edges, nodes, pendingCenterAfterLayout])
+
+  function handleFilterChange(updateFilter: (checked: boolean) => void, checked: boolean) {
+    updateFilter(checked)
+    setPendingLayoutReason('filter')
+  }
 
   function handleNodesChange(changes: NodeChange<DbmlTableNode>[]) {
     setNodes((currentNodes) => applyDiagramNodeChanges(changes, currentNodes))
@@ -172,37 +260,13 @@ function DiagramCanvasInner({
         <div className="searchBox">
           <Search size={17} />
           <Input
-            className="h-8 border-0 px-0 shadow-none focus-visible:ring-0"
+            className="h-full border-0 px-0 shadow-none focus-visible:ring-0"
             aria-label={t(language, 'diagram.search')}
             value={query}
             placeholder={t(language, 'diagram.search')}
             onChange={(event) => onQueryChange(event.target.value)}
           />
         </div>
-        <label className="toolbarCheckbox">
-          <input
-            type="checkbox"
-            checked={showRelatedOnly}
-            onChange={(event) => setShowRelatedOnly(event.target.checked)}
-          />
-          <span>{t(language, 'diagram.showRelatedOnly')}</span>
-        </label>
-        <label className="toolbarCheckbox">
-          <input
-            type="checkbox"
-            checked={showConnectedOnly}
-            onChange={(event) => setShowConnectedOnly(event.target.checked)}
-          />
-          <span>{t(language, 'diagram.hideIsolatedTables')}</span>
-        </label>
-        <label className="toolbarCheckbox">
-          <input
-            type="checkbox"
-            checked={showObjectNotes}
-            onChange={(event) => setShowObjectNotes(event.target.checked)}
-          />
-          <span>{t(language, 'diagram.showObjectNotes')}</span>
-        </label>
         <Button size="sm" variant="outline" type="button" onClick={applyLayout}>
           <LayoutDashboard size={17} />
           {t(language, 'diagram.layout')}
@@ -222,6 +286,30 @@ function DiagramCanvasInner({
         <Button size="sm" variant="outline" type="button" onClick={() => void exportImage('svg')} title={t(language, 'diagram.exportSvg')}>
           SVG
         </Button>
+        <label className="toolbarCheckbox">
+          <input
+            type="checkbox"
+            checked={showRelatedOnly}
+            onChange={(event) => handleFilterChange(setShowRelatedOnly, event.target.checked)}
+          />
+          <span>{t(language, 'diagram.showRelatedOnly')}</span>
+        </label>
+        <label className="toolbarCheckbox">
+          <input
+            type="checkbox"
+            checked={showConnectedOnly}
+            onChange={(event) => handleFilterChange(setShowConnectedOnly, event.target.checked)}
+          />
+          <span>{t(language, 'diagram.hideIsolatedTables')}</span>
+        </label>
+        <label className="toolbarCheckbox">
+          <input
+            type="checkbox"
+            checked={showObjectNotes}
+            onChange={(event) => handleFilterChange(setShowObjectNotes, event.target.checked)}
+          />
+          <span>{t(language, 'diagram.showObjectNotes')}</span>
+        </label>
       </div>
 
       <ReactFlow

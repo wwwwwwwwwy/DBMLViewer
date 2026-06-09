@@ -38,6 +38,7 @@ type DiagramState = {
   positions: SavedNodePositions
   selectedTableId?: string
   selectedRelationId?: string
+  layoutRequestId: number
   highlightedColumnIds: string[]
   query: string
   language: Language
@@ -70,6 +71,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
   positions: {},
   selectedTableId: undefined,
   selectedRelationId: undefined,
+  layoutRequestId: 0,
   highlightedColumnIds: [],
   query: '',
   language: defaultLanguage,
@@ -253,6 +255,7 @@ export const useDiagramStore = create<DiagramState>((set, get) => ({
       currentWorkspaceId: id,
       selectedTableId: undefined,
       selectedRelationId: undefined,
+      layoutRequestId: result.ok ? get().layoutRequestId + 1 : get().layoutRequestId,
       highlightedColumnIds: [],
       query: '',
       workspaceSummaries: await loadWorkspaceSummaries(),

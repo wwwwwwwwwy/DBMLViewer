@@ -6,6 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Input } from '../../components/ui/input'
 import { defaultLanguage, t, type Language } from '../../i18n'
 import type { RelationModel, SchemaModel, TableModel } from '../dbml/dbmlTypes'
+import {
+  findRelationPath,
+  findTableByQuery,
+  suggestTables,
+  type RelationPathResult,
+  type RelationPathStep,
+} from './relationPath'
 
 type InspectorPanelProps = {
   model?: SchemaModel
@@ -97,6 +104,7 @@ function Overview({
       <Metric icon={<Table2 size={18} />} label={t(language, 'inspector.tables')} value={String(model.tables.length)} />
       <Metric icon={<GitBranch size={18} />} label={t(language, 'inspector.relations')} value={String(model.relations.length)} />
       <Metric icon={<Database size={18} />} label={t(language, 'inspector.enums')} value={String(model.enums.length)} />
+      <RelationLookup model={model} language={language} />
       <section className="tableListSection">
         <h3>{t(language, 'inspector.tableList')}</h3>
         <Input
@@ -121,6 +129,200 @@ function Overview({
           ))}
         </div>
       </section>
+    </div>
+  )
+}
+
+function RelationLookup({
+  model,
+  language,
+}: {
+  model: SchemaModel
+  language: Language
+}) {
+  const [fromQuery, setFromQuery] = useState('')
+  const [toQuery, setToQuery] = useState('')
+  const [fromTableId, setFromTableId] = useState<string | undefined>()
+  const [toTableId, setToTableId] = useState<string | undefined>()
+  const [activeInput, setActiveInput] = useState<'from' | 'to' | undefined>()
+
+  const fromSuggestions = useMemo(
+    () => suggestTables(model, fromQuery),
+    [model, fromQuery],
+  )
+  const toSuggestions = useMemo(
+    () => suggestTables(model, toQuery),
+    [model, toQuery],
+  )
+  const relationPath = useMemo(
+    () => fromTableId && toTableId ? findRelationPath(model, fromTableId, toTableId) : undefined,
+    [fromTableId, model, toTableId],
+  )
+
+  const handleQueryChange = (
+    query: string,
+    side: 'from' | 'to',
+  ) => {
+    const table = findTableByQuery(model, query)
+
+    if (side === 'from') {
+      setFromQuery(query)
+      setFromTableId(table?.id)
+    } else {
+      setToQuery(query)
+      setToTableId(table?.id)
+    }
+  }
+
+  const handleSelectTable = (table: TableModel, side: 'from' | 'to') => {
+    if (side === 'from') {
+      setFromQuery(table.name)
+      setFromTableId(table.id)
+    } else {
+      setToQuery(table.name)
+      setToTableId(table.id)
+    }
+
+    setActiveInput(undefined)
+  }
+
+  return (
+    <section className="relationLookup">
+      <h3>{t(language, 'inspector.relationLookup')}</h3>
+      <div className="relationLookupFields">
+        <TableCombobox
+          id="relationLookupFrom"
+          label={t(language, 'inspector.relationLookupFrom')}
+          language={language}
+          value={fromQuery}
+          suggestions={fromSuggestions}
+          isOpen={activeInput === 'from'}
+          onChange={(query) => handleQueryChange(query, 'from')}
+          onFocus={() => setActiveInput('from')}
+          onSelect={(table) => handleSelectTable(table, 'from')}
+        />
+        <TableCombobox
+          id="relationLookupTo"
+          label={t(language, 'inspector.relationLookupTo')}
+          language={language}
+          value={toQuery}
+          suggestions={toSuggestions}
+          isOpen={activeInput === 'to'}
+          onChange={(query) => handleQueryChange(query, 'to')}
+          onFocus={() => setActiveInput('to')}
+          onSelect={(table) => handleSelectTable(table, 'to')}
+        />
+      </div>
+      {fromTableId && toTableId ? (
+        <RelationLookupResult
+          fromTableId={fromTableId}
+          language={language}
+          result={relationPath ?? null}
+          toTableId={toTableId}
+        />
+      ) : null}
+    </section>
+  )
+}
+
+function TableCombobox({
+  id,
+  label,
+  language,
+  value,
+  suggestions,
+  isOpen,
+  onChange,
+  onFocus,
+  onSelect,
+}: {
+  id: string
+  label: string
+  language: Language
+  value: string
+  suggestions: TableModel[]
+  isOpen: boolean
+  onChange: (query: string) => void
+  onFocus: () => void
+  onSelect: (table: TableModel) => void
+}) {
+  const listId = `${id}Suggestions`
+
+  return (
+    <div className="tableCombobox">
+      <label htmlFor={id}>{label}</label>
+      <Input
+        aria-autocomplete="list"
+        aria-controls={listId}
+        aria-expanded={isOpen}
+        aria-label={label}
+        id={id}
+        role="combobox"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={onFocus}
+      />
+      {isOpen && suggestions.length ? (
+        <div className="tableSuggestionList" id={listId} role="listbox">
+          {suggestions.map((table) => (
+            <button
+              aria-label={`${table.name} ${table.note || t(language, 'inspector.noNote')}`}
+              className="tableSuggestion"
+              key={table.id}
+              role="option"
+              type="button"
+              onClick={() => onSelect(table)}
+            >
+              <strong>{table.name}</strong>
+              <span>{table.note || t(language, 'inspector.noNote')}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function RelationLookupResult({
+  fromTableId,
+  toTableId,
+  result,
+  language,
+}: {
+  fromTableId: string
+  toTableId: string
+  result: RelationPathResult | null
+  language: Language
+}) {
+  if (!result) {
+    return (
+      <div className="relationLookupResult relationLookupResultMuted">
+        {t(language, 'inspector.unrelated')}
+      </div>
+    )
+  }
+
+  const intermediateTables = result.steps
+    .map((step) => step.toTableId)
+    .filter((tableId) => tableId !== fromTableId && tableId !== toTableId)
+
+  return (
+    <div className="relationLookupResult">
+      <strong>
+        {result.kind === 'direct'
+          ? t(language, 'inspector.directRelation')
+          : t(language, 'inspector.indirectRelation')}
+      </strong>
+      {intermediateTables.length ? (
+        <p>{t(language, 'inspector.intermediateTables', { tables: intermediateTables.join(' → ') })}</p>
+      ) : null}
+      <div className="relationPathSteps">
+        {result.steps.map((step) => (
+          <div className="relationPathStep" key={`${step.relationId}-${step.fromTableId}-${step.toTableId}`}>
+            {formatRelationStep(step)}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -269,6 +471,10 @@ function Metric({
 function lastSegment(value: string): string {
   const parts = value.split('.')
   return parts[parts.length - 1] || value
+}
+
+function formatRelationStep(step: RelationPathStep): string {
+  return `${step.fromColumnIds.join(', ')} → ${step.toColumnIds.join(', ')}`
 }
 
 function filterTablesForList(tables: TableModel[], query: string): TableModel[] {
