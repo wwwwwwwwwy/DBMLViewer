@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Input } from '../../components/ui/input'
 import { defaultLanguage, t, type Language } from '../../i18n'
+import { buildRelationSubsetDbml } from '../dbml/relationSubsetDbml'
 import type { RelationModel, SchemaModel, TableModel } from '../dbml/dbmlTypes'
 import {
   findRelationPath,
@@ -22,6 +23,7 @@ type InspectorPanelProps = {
   onCopyModel: () => Promise<void>
   onSelectTable?: (tableId: string) => void
   onSelectRelation?: (relationId: string) => void
+  onCreateRelationDbml?: (source: string, name: string) => void
 }
 
 export function InspectorPanel({
@@ -32,6 +34,7 @@ export function InspectorPanel({
   onCopyModel,
   onSelectTable,
   onSelectRelation,
+  onCreateRelationDbml,
 }: InspectorPanelProps) {
   const table = model?.tables.find((item) => item.id === selectedTableId)
   const relation = model?.relations.find((item) => item.id === selectedRelationId)
@@ -74,7 +77,14 @@ export function InspectorPanel({
           onSelectTable={onSelectTable}
         />
       ) : null}
-      {!table && !relation ? <Overview model={model} language={language} onSelectTable={onSelectTable} /> : null}
+      {!table && !relation ? (
+        <Overview
+          model={model}
+          language={language}
+          onSelectTable={onSelectTable}
+          onCreateRelationDbml={onCreateRelationDbml}
+        />
+      ) : null}
     </aside>
   )
 }
@@ -83,10 +93,12 @@ function Overview({
   model,
   language,
   onSelectTable,
+  onCreateRelationDbml,
 }: {
   model?: SchemaModel
   language: Language
   onSelectTable?: (tableId: string) => void
+  onCreateRelationDbml?: (source: string, name: string) => void
 }) {
   const [tableListQuery, setTableListQuery] = useState('')
   const filteredTables = useMemo(
@@ -104,7 +116,7 @@ function Overview({
       <Metric icon={<Table2 size={18} />} label={t(language, 'inspector.tables')} value={String(model.tables.length)} />
       <Metric icon={<GitBranch size={18} />} label={t(language, 'inspector.relations')} value={String(model.relations.length)} />
       <Metric icon={<Database size={18} />} label={t(language, 'inspector.enums')} value={String(model.enums.length)} />
-      <RelationLookup model={model} language={language} />
+      <RelationLookup model={model} language={language} onCreateRelationDbml={onCreateRelationDbml} />
       <section className="tableListSection">
         <h3>{t(language, 'inspector.tableList')}</h3>
         <Input
@@ -136,15 +148,19 @@ function Overview({
 function RelationLookup({
   model,
   language,
+  onCreateRelationDbml,
 }: {
   model: SchemaModel
   language: Language
+  onCreateRelationDbml?: (source: string, name: string) => void
 }) {
   const [fromQuery, setFromQuery] = useState('')
   const [toQuery, setToQuery] = useState('')
   const [fromTableId, setFromTableId] = useState<string | undefined>()
   const [toTableId, setToTableId] = useState<string | undefined>()
   const [activeInput, setActiveInput] = useState<'from' | 'to' | undefined>()
+  const [namingPath, setNamingPath] = useState<RelationPathResult | null>(null)
+  const [dbmlName, setDbmlName] = useState('')
 
   const fromSuggestions = useMemo(
     () => suggestTables(model, fromQuery),
@@ -186,6 +202,23 @@ function RelationLookup({
     setActiveInput(undefined)
   }
 
+  const handleOpenNamingDialog = (result: RelationPathResult) => {
+    const fromName = model.tables.find((table) => table.id === fromTableId)?.name || fromQuery
+    const toName = model.tables.find((table) => table.id === toTableId)?.name || toQuery
+
+    setDbmlName(t(language, 'inspector.convertDbmlDefaultName', { from: fromName, to: toName }))
+    setNamingPath(result)
+  }
+
+  const handleCreateDbml = () => {
+    if (!namingPath) return
+    const name = dbmlName.trim()
+    if (!name) return
+
+    onCreateRelationDbml?.(buildRelationSubsetDbml(model, namingPath, name), name)
+    setNamingPath(null)
+  }
+
   return (
     <section className="relationLookup">
       <h3>{t(language, 'inspector.relationLookup')}</h3>
@@ -217,9 +250,44 @@ function RelationLookup({
         <RelationLookupResult
           fromTableId={fromTableId}
           language={language}
+          onConvertDbml={onCreateRelationDbml ? handleOpenNamingDialog : undefined}
           result={relationPath ?? null}
           toTableId={toTableId}
         />
+      ) : null}
+      {namingPath ? (
+        <div className="relationDbmlDialogBackdrop">
+          <form
+            className="relationDbmlDialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t(language, 'inspector.convertDbmlDialogTitle')}
+            onSubmit={(event) => {
+              event.preventDefault()
+              handleCreateDbml()
+            }}
+          >
+            <div className="relationDbmlDialogHeader">
+              <h4>{t(language, 'inspector.convertDbmlDialogTitle')}</h4>
+              <p>{t(language, 'inspector.convertDbmlDialogDescription')}</p>
+            </div>
+            <label htmlFor="relationDbmlName">{t(language, 'inspector.convertDbmlName')}</label>
+            <Input
+              id="relationDbmlName"
+              aria-label={t(language, 'inspector.convertDbmlName')}
+              value={dbmlName}
+              onChange={(event) => setDbmlName(event.target.value)}
+            />
+            <div className="relationDbmlDialogActions">
+              <Button type="button" variant="outline" onClick={() => setNamingPath(null)}>
+                {t(language, 'inspector.cancelConvertDbml')}
+              </Button>
+              <Button type="submit" disabled={!dbmlName.trim()}>
+                {t(language, 'inspector.saveAndSwitchDbml')}
+              </Button>
+            </div>
+          </form>
+        </div>
       ) : null}
     </section>
   )
@@ -288,11 +356,13 @@ function RelationLookupResult({
   toTableId,
   result,
   language,
+  onConvertDbml,
 }: {
   fromTableId: string
   toTableId: string
   result: RelationPathResult | null
   language: Language
+  onConvertDbml?: (result: RelationPathResult) => void
 }) {
   if (!result) {
     return (
@@ -323,6 +393,11 @@ function RelationLookupResult({
           </div>
         ))}
       </div>
+      {onConvertDbml ? (
+        <Button className="relationConvertButton" type="button" onClick={() => onConvertDbml(result)}>
+          {t(language, 'inspector.convertDbml')}
+        </Button>
+      ) : null}
     </div>
   )
 }

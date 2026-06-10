@@ -72,6 +72,13 @@ export const translations = {
     'inspector.update': '更新',
     'inspector.notSet': '未设置',
     'inspector.copyJson': '复制规范化 JSON',
+    'inspector.convertDbml': '转换 DBML',
+    'inspector.convertDbmlDefaultName': '{from}-{to} 关系',
+    'inspector.convertDbmlDialogTitle': '转换为 DBML',
+    'inspector.convertDbmlDialogDescription': '录入名称后，将查询结果中的表和关系保存为新的 DBML。',
+    'inspector.convertDbmlName': 'DBML 名称',
+    'inspector.cancelConvertDbml': '取消',
+    'inspector.saveAndSwitchDbml': '保存并切换',
   },
   en: {
     'app.loading': 'Loading DBML workspace...',
@@ -144,6 +151,13 @@ export const translations = {
     'inspector.update': 'Update',
     'inspector.notSet': 'not set',
     'inspector.copyJson': 'Copy normalized JSON',
+    'inspector.convertDbml': 'Convert DBML',
+    'inspector.convertDbmlDefaultName': '{from}-{to} relation',
+    'inspector.convertDbmlDialogTitle': 'Convert to DBML',
+    'inspector.convertDbmlDialogDescription': 'Enter a name to save the lookup tables and relations as a new DBML file.',
+    'inspector.convertDbmlName': 'DBML name',
+    'inspector.cancelConvertDbml': 'Cancel',
+    'inspector.saveAndSwitchDbml': 'Save and switch',
   },
 } as const
 

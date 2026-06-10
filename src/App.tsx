@@ -91,6 +91,7 @@ function App() {
         onCopyModel={copyModelJson}
         onSelectTable={selectTable}
         onSelectRelation={selectRelation}
+        onCreateRelationDbml={(source, name) => void importWorkspace(source, name)}
       />
     </main>
   )

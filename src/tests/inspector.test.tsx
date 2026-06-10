@@ -196,6 +196,38 @@ describe('InspectorPanel', () => {
     expect(screen.getByText('orders.user_id → users.id')).toBeInTheDocument()
   })
 
+  it('converts a successful relation lookup into a named DBML source', async () => {
+    const user = userEvent.setup()
+    const onCreateRelationDbml = vi.fn()
+
+    render(
+      <InspectorPanel
+        model={modelWithIndirectRelation}
+        onCopyModel={vi.fn()}
+        onCreateRelationDbml={onCreateRelationDbml}
+      />,
+    )
+
+    await user.type(screen.getByRole('combobox', { name: '起始表' }), 'order_items')
+    await user.click(screen.getByRole('option', { name: 'order_items 订单明细表' }))
+    await user.type(screen.getByRole('combobox', { name: '目标表' }), 'users')
+    await user.click(screen.getByRole('option', { name: 'users 用户主数据表' }))
+    await user.click(screen.getByRole('button', { name: '转换 DBML' }))
+    await user.clear(screen.getByRole('textbox', { name: 'DBML 名称' }))
+    await user.type(screen.getByRole('textbox', { name: 'DBML 名称' }), '订单用户链路')
+    await user.click(screen.getByRole('button', { name: '保存并切换' }))
+
+    expect(onCreateRelationDbml).toHaveBeenCalledTimes(1)
+    expect(onCreateRelationDbml.mock.calls[0][1]).toBe('订单用户链路')
+    expect(onCreateRelationDbml.mock.calls[0][0]).toContain('Project "订单用户链路"')
+    expect(onCreateRelationDbml.mock.calls[0][0]).toContain('Table users')
+    expect(onCreateRelationDbml.mock.calls[0][0]).toContain('Table orders')
+    expect(onCreateRelationDbml.mock.calls[0][0]).toContain('Table order_items')
+    expect(onCreateRelationDbml.mock.calls[0][0]).not.toContain('Table audit_logs')
+    expect(onCreateRelationDbml.mock.calls[0][0]).toContain('Ref: order_items.order_id > orders.id')
+    expect(onCreateRelationDbml.mock.calls[0][0]).toContain('Ref: orders.user_id > users.id')
+  })
+
   it('shows an unrelated message when there is no direct or indirect relation', async () => {
     const user = userEvent.setup()
 
